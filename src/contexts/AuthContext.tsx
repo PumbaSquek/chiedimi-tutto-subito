@@ -1,10 +1,15 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import { 
+  User, 
+  getCurrentUser, 
+  setCurrentUser, 
+  createUser, 
+  authenticateUser, 
+  findUserByUsername 
+} from '@/lib/localStorage';
 
 interface AuthContextType {
   user: User | null;
-  session: Session | null;
   username: string | null;
   signUp: (username: string, password: string) => Promise<{ error: any }>;
   signIn: (username: string, password: string) => Promise<{ error: any }>;
@@ -16,75 +21,45 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [username, setUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          // Fetch username from profiles table
-          setTimeout(async () => {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('username')
-              .eq('user_id', session.user.id)
-              .single();
-            
-            setUsername(profile?.username || null);
-          }, 0);
-        } else {
-          setUsername(null);
-        }
-        
-        setLoading(false);
-      }
-    );
-
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    // Carica utente dalla sessione salvata
+    const savedUser = getCurrentUser();
+    setUser(savedUser);
+    setLoading(false);
   }, []);
 
   const signUp = async (username: string, password: string) => {
     try {
       console.log('Tentativo di registrazione per username:', username);
       
-      // Use generated email for Supabase auth
-      const email = `${username}@menudesigner.local`;
-      console.log('Email generata:', email);
-      
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            username: username
-          }
-        }
-      });
-      
-      console.log('Risposta Supabase signUp:', { data, error });
-      
-      if (error) {
-        console.error('Errore durante la registrazione:', error);
+      // Controlla se l'username esiste già
+      const existingUser = findUserByUsername(username);
+      if (existingUser) {
+        return { error: { message: 'Username già esistente' } };
       }
       
-      return { error };
+      // Validazioni base
+      if (username.length < 3) {
+        return { error: { message: 'Username deve essere almeno 3 caratteri' } };
+      }
+      
+      if (password.length < 6) {
+        return { error: { message: 'Password deve essere almeno 6 caratteri' } };
+      }
+      
+      // Crea nuovo utente
+      const newUser = createUser(username, password);
+      setUser(newUser);
+      setCurrentUser(newUser);
+      
+      console.log('Utente registrato con successo:', newUser);
+      return { error: null };
+      
     } catch (err) {
-      console.error('Errore imprevisto durante la registrazione:', err);
-      return { error: err };
+      console.error('Errore durante la registrazione:', err);
+      return { error: { message: 'Errore durante la registrazione' } };
     }
   };
 
@@ -92,37 +67,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('Tentativo di login per username:', username);
       
-      // Use generated email for Supabase auth
-      const email = `${username}@menudesigner.local`;
-      console.log('Email generata per login:', email);
-      
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-      
-      console.log('Risposta Supabase signIn:', { data, error });
-      
-      if (error) {
-        console.error('Errore durante il login:', error);
+      const user = authenticateUser(username, password);
+      if (!user) {
+        return { error: { message: 'Username o password non corretti' } };
       }
       
-      return { error };
+      setUser(user);
+      setCurrentUser(user);
+      
+      console.log('Login effettuato con successo per:', user);
+      return { error: null };
+      
     } catch (err) {
-      console.error('Errore imprevisto durante il login:', err);
-      return { error: err };
+      console.error('Errore durante il login:', err);
+      return { error: { message: 'Errore durante il login' } };
     }
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    return { error };
+    try {
+      setUser(null);
+      setCurrentUser(null);
+      console.log('Logout effettuato');
+      return { error: null };
+    } catch (err) {
+      console.error('Errore durante il logout:', err);
+      return { error: { message: 'Errore durante il logout' } };
+    }
   };
 
   const value = {
     user,
-    session,
-    username,
+    username: user?.username || null,
     signUp,
     signIn,
     signOut,

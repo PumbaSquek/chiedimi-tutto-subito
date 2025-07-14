@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useReactToPrint } from "react-to-print";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { saveUserMenu, getUserMenu, MenuItem as StoredMenuItem } from "@/lib/localStorage";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -137,26 +137,18 @@ const MenuDesigner: React.FC = () => {
   const loadUserMenu = async () => {
     try {
       setLoading(true);
+      console.log('Caricamento menu per utente:', user!.id);
 
-      // Load user's menu
-      const { data: menu } = await supabase
-        .from('menus')
-        .select('*')
-        .eq('user_id', user!.id)
-        .single();
-
-      if (menu) {
-        setMenuTitle(menu.title);
-
-        // Load menu items
-        const { data: menuItems } = await supabase
-          .from('menu_items')
-          .select('*')
-          .eq('menu_id', menu.id);
-
-        if (menuItems) {
-          setSelectedItems(menuItems);
-        }
+      // Carica menu dell'utente dal localStorage
+      const userMenu = getUserMenu(user!.id);
+      
+      if (userMenu) {
+        console.log('Menu trovato:', userMenu);
+        setMenuTitle(userMenu.title);
+        setSelectedItems(userMenu.items);
+      } else {
+        console.log('Nessun menu trovato, usando valori di default');
+        // Nessun menu salvato, mantieni i valori di default
       }
     } catch (error) {
       console.error('Error loading menu:', error);
@@ -165,57 +157,17 @@ const MenuDesigner: React.FC = () => {
     }
   };
 
-  const saveUserMenu = async () => {
+  const saveUserMenuData = async () => {
     if (!user) return;
 
     try {
       setSaving(true);
+      console.log('Salvataggio menu per utente:', user.id);
 
-      // Get or create user's menu
-      let { data: menu } = await supabase
-        .from('menus')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
+      // Salva nel localStorage
+      saveUserMenu(user.id, menuTitle, selectedItems);
 
-      if (!menu) {
-        const { data: newMenu, error } = await supabase
-          .from('menus')
-          .insert({ user_id: user.id, title: menuTitle })
-          .select()
-          .single();
-
-        if (error) throw error;
-        menu = newMenu;
-      } else {
-        // Update menu title
-        await supabase
-          .from('menus')
-          .update({ title: menuTitle })
-          .eq('id', menu.id);
-      }
-
-      // Delete existing menu items
-      await supabase
-        .from('menu_items')
-        .delete()
-        .eq('menu_id', menu.id);
-
-      // Insert new menu items
-      if (selectedItems.length > 0) {
-        const menuItemsToInsert = selectedItems.map(item => ({
-          menu_id: menu.id,
-          name: item.name,
-          description: item.description,
-          price: item.price,
-          category: item.category
-        }));
-
-        await supabase
-          .from('menu_items')
-          .insert(menuItemsToInsert);
-      }
-
+      console.log('Menu salvato con successo');
       toast({
         title: "Menu salvato",
         description: "Il tuo menu è stato salvato con successo!",
@@ -312,7 +264,7 @@ const MenuDesigner: React.FC = () => {
           </div>
           <div className="flex gap-3">
             <Button variant="gold" onClick={handlePrint}><Download className="h-4 w-4"/>Esporta PDF</Button>
-            <Button variant="elegant" onClick={saveUserMenu} disabled={saving}>
+            <Button variant="elegant" onClick={saveUserMenuData} disabled={saving}>
               <Save className="h-4 w-4"/>
               {saving ? 'Salvando...' : 'Salva Menu'}
             </Button>
