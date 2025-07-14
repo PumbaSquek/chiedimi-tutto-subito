@@ -130,3 +130,7 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+/* Regola per scurire il menu durante l'export in PDF */
+#menu-to-export.pdf-export {
+  filter: brightness(0.75) contrast(1.3) saturate(1.1);
+}
