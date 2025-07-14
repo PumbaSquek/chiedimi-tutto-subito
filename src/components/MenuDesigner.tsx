@@ -3,6 +3,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { 
   ChefHat, 
   Download, 
@@ -13,7 +17,9 @@ import {
   Utensils,
   Wine,
   Coffee,
-  Cake
+  Cake,
+  Edit,
+  X
 } from "lucide-react";
 
 interface MenuItem {
@@ -34,9 +40,12 @@ interface MenuCategory {
 const MenuDesigner = () => {
   const [selectedItems, setSelectedItems] = useState<MenuItem[]>([]);
   const [menuTitle, setMenuTitle] = useState("Il Nostro Menu");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [currentItem, setCurrentItem] = useState<MenuItem | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   
-  // Categorie predefinite con piatti di esempio
-  const categories: MenuCategory[] = [
+  // Categorie predefinite con piatti di esempio (ora state)
+  const [categories, setCategories] = useState<MenuCategory[]>([
     {
       id: "antipasti",
       name: "Antipasti",
@@ -170,7 +179,7 @@ const MenuDesigner = () => {
         }
       ]
     }
-  ];
+  ]);
 
   const addToMenu = (item: MenuItem) => {
     if (!selectedItems.find(selected => selected.id === item.id)) {
@@ -185,6 +194,92 @@ const MenuDesigner = () => {
   const exportToPDF = () => {
     // Per ora simuliamo l'export
     alert("📄 Export PDF implementato! Il menu verrà scaricato in formato PDF.");
+  };
+
+  // Funzioni per gestire piatti
+  const openEditDialog = (item: MenuItem) => {
+    setCurrentItem(item);
+    setIsEditing(true);
+    setIsDialogOpen(true);
+  };
+
+  const openAddDialog = (categoryId: string) => {
+    setCurrentItem({
+      id: '',
+      name: '',
+      description: '',
+      price: '',
+      category: categoryId
+    });
+    setIsEditing(false);
+    setIsDialogOpen(true);
+  };
+
+  const closeDialog = () => {
+    setIsDialogOpen(false);
+    setCurrentItem(null);
+    setIsEditing(false);
+  };
+
+  const saveItem = () => {
+    if (!currentItem) return;
+
+    setCategories(prevCategories => 
+      prevCategories.map(category => {
+        if (category.id === currentItem.category) {
+          if (isEditing) {
+            // Modifica piatto esistente
+            return {
+              ...category,
+              items: category.items.map(item => 
+                item.id === currentItem.id ? currentItem : item
+              )
+            };
+          } else {
+            // Aggiungi nuovo piatto
+            const newItem = {
+              ...currentItem,
+              id: `${currentItem.category}_${Date.now()}`
+            };
+            return {
+              ...category,
+              items: [...category.items, newItem]
+            };
+          }
+        }
+        return category;
+      })
+    );
+
+    // Aggiorna anche i piatti selezionati se modificati
+    if (isEditing) {
+      setSelectedItems(prevItems => 
+        prevItems.map(item => 
+          item.id === currentItem.id ? currentItem : item
+        )
+      );
+    }
+
+    closeDialog();
+  };
+
+  const deleteItem = (categoryId: string, itemId: string) => {
+    setCategories(prevCategories => 
+      prevCategories.map(category => {
+        if (category.id === categoryId) {
+          return {
+            ...category,
+            items: category.items.filter(item => item.id !== itemId)
+          };
+        }
+        return category;
+      })
+    );
+
+    // Rimuovi anche dai piatti selezionati
+    setSelectedItems(prevItems => 
+      prevItems.filter(item => item.id !== itemId)
+    );
   };
 
   const groupedMenuItems = selectedItems.reduce((acc, item) => {
@@ -238,13 +333,31 @@ const MenuDesigner = () => {
                     {category.items.map((item) => (
                       <div 
                         key={item.id}
-                        className="p-3 border border-border rounded-lg hover:border-restaurant-gold transition-colors bg-background"
+                        className="p-3 border border-border rounded-lg hover:border-restaurant-gold transition-colors bg-background group"
                       >
                         <div className="flex justify-between items-start mb-2">
                           <h4 className="font-medium text-sm">{item.name}</h4>
-                          <Badge variant="secondary" className="text-xs">
-                            €{item.price}
-                          </Badge>
+                          <div className="flex items-center gap-1">
+                            <Badge variant="secondary" className="text-xs">
+                              €{item.price}
+                            </Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEditDialog(item)}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0"
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => deleteItem(category.id, item.id)}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0 text-destructive hover:text-destructive"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
                         {item.description && (
                           <p className="text-xs text-muted-foreground mb-2">
@@ -263,6 +376,17 @@ const MenuDesigner = () => {
                         </Button>
                       </div>
                     ))}
+                    
+                    {/* Bottone per aggiungere nuovo piatto */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openAddDialog(category.id)}
+                      className="w-full text-xs mt-2 border-dashed"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Aggiungi Nuovo Piatto
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -374,6 +498,67 @@ const MenuDesigner = () => {
           </Card>
         </div>
       </div>
+
+      {/* Dialog per modificare/aggiungere piatti */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {isEditing ? 'Modifica Piatto' : 'Aggiungi Nuovo Piatto'}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {currentItem && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="name">Nome del piatto</Label>
+                <Input
+                  id="name"
+                  value={currentItem.name}
+                  onChange={(e) => setCurrentItem({...currentItem, name: e.target.value})}
+                  placeholder="Es. Spaghetti alla Carbonara"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="description">Descrizione</Label>
+                <Textarea
+                  id="description"
+                  value={currentItem.description || ''}
+                  onChange={(e) => setCurrentItem({...currentItem, description: e.target.value})}
+                  placeholder="Descrivi gli ingredienti e la preparazione"
+                  rows={3}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="price">Prezzo (€)</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  step="0.50"
+                  value={currentItem.price}
+                  onChange={(e) => setCurrentItem({...currentItem, price: e.target.value})}
+                  placeholder="12.00"
+                />
+              </div>
+              
+              <div className="flex gap-2 pt-4">
+                <Button 
+                  onClick={saveItem}
+                  disabled={!currentItem.name || !currentItem.price}
+                  className="flex-1"
+                >
+                  {isEditing ? 'Salva Modifiche' : 'Aggiungi Piatto'}
+                </Button>
+                <Button variant="outline" onClick={closeDialog}>
+                  Annulla
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
