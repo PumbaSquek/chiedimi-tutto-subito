@@ -57,33 +57,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signUp = async (username: string, password: string) => {
-    // Use generated email for Supabase auth
-    const email = `${username}@menudesigner.local`;
-    
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/`,
-        data: {
-          username: username
+    try {
+      console.log('Tentativo di registrazione per username:', username);
+      
+      // Use generated email for Supabase auth
+      const email = `${username}@menudesigner.local`;
+      console.log('Email generata:', email);
+      
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            username: username
+          }
         }
+      });
+      
+      console.log('Risposta Supabase signUp:', { data, error });
+      
+      if (error) {
+        console.error('Errore durante la registrazione:', error);
       }
-    });
-    
-    return { error };
+      
+      return { error };
+    } catch (err) {
+      console.error('Errore imprevisto durante la registrazione:', err);
+      return { error: err };
+    }
   };
 
   const signIn = async (username: string, password: string) => {
-    // Use generated email for Supabase auth
-    const email = `${username}@menudesigner.local`;
-    
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-    
-    return { error };
+    try {
+      console.log('Tentativo di login per username:', username);
+      
+      // Use generated email for Supabase auth
+      const email = `${username}@menudesigner.local`;
+      console.log('Email generata per login:', email);
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      
+      console.log('Risposta Supabase signIn:', { data, error });
+      
+      if (error) {
+        console.error('Errore durante il login:', error);
+      }
+      
+      return { error };
+    } catch (err) {
+      console.error('Errore imprevisto durante il login:', err);
+      return { error: err };
+    }
   };
 
   const signOut = async () => {
